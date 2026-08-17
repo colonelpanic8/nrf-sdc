@@ -29,4 +29,5 @@ overflow-checks = false
 #embassy-time-driver = {path = "../embassy/embassy-time-driver"}
 #embassy-embedded-hal = {path = "../embassy/embassy-embedded-hal"}
 
-#bt-hci = { path = "../bt-hci" }
+bt-hci = { git = "https://github.com/embassy-rs/bt-hci", rev = "c99075982dcdeb9ddd1a90d5fa69bc27db427458" }
+bt-hci-transport = { git = "https://github.com/embassy-rs/bt-hci", rev = "c99075982dcdeb9ddd1a90d5fa69bc27db427458" }

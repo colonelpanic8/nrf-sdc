@@ -156,6 +156,7 @@ const TIMESLOT_TIMEOUT_PRIORITY_NORMAL_US: u32 = 30000;
 const TIMESLOT_SLACK_US: u32 = 4000;
 // Portion of the slack reserved for returning from the callback after the
 // last flash operation completes.
+#[cfg(all(feature = "nrf52", not(feature = "nrf52832")))]
 const TIMESLOT_EXIT_MARGIN_US: u32 = 1000;
 
 #[cfg(feature = "nrf52")]

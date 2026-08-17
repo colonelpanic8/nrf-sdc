@@ -150,8 +150,13 @@ const TIMESLOT_FLASH_PRIORITY: u8 = raw::MPSL_TIMESLOT_PRIORITY_NORMAL as u8;
 
 // Values derived from nRF SDK
 const TIMESLOT_TIMEOUT_PRIORITY_NORMAL_US: u32 = 30000;
-// Extra slack for non-flash activity
-const TIMESLOT_SLACK_US: u32 = 1000;
+// Extra slack for non-flash activity. Overstaying a timeslot is fatal (MPSL
+// asserts after MPSL_TIMESLOT_SIGNAL_OVERSTAYED), so this budgets for callback
+// entry latency and NVMC timing tolerance rather than the theoretical minimum.
+const TIMESLOT_SLACK_US: u32 = 4000;
+// Portion of the slack reserved for returning from the callback after the
+// last flash operation completes.
+const TIMESLOT_EXIT_MARGIN_US: u32 = 1000;
 
 #[cfg(feature = "nrf52")]
 // Values according to nRF52 product specification
@@ -160,7 +165,7 @@ const ERASE_PAGE_DURATION_US: u32 = 85_000;
 const WRITE_WORD_DURATION_US: u32 = 41;
 
 #[cfg(all(feature = "nrf52", not(feature = "nrf52832")))]
-const ERASE_PARTIAL_PAGE_DURATION_MS: u32 = 10;
+const ERASE_PARTIAL_PAGE_DURATION_MS: u32 = 5;
 #[cfg(all(feature = "nrf52", not(feature = "nrf52832")))]
 const ERASE_PARTIAL_PAGE_DURATION_US: u32 = ERASE_PARTIAL_PAGE_DURATION_MS * 1000;
 
@@ -482,6 +487,17 @@ impl FlashOp {
     ) -> core::ops::ControlFlow<()> {
         let p = pac::NVMC;
         loop {
+            // Only start a partial erase that can finish and still leave time
+            // to return before the granted slot (slot_duration + slack) ends.
+            // This also covers late callback entry: get_time() runs from the
+            // slot start, so entry latency shows up here and skips the erase
+            // rather than overstaying, which is a fatal MPSL assert.
+            if get_time() + ERASE_PARTIAL_PAGE_DURATION_US + TIMESLOT_EXIT_MARGIN_US
+                > slot_duration_us + TIMESLOT_SLACK_US
+            {
+                return ControlFlow::Continue(());
+            }
+
             // Enable erase and erase next page
             p.config().write(|w| w.set_wen(Wen::Een));
             p.erasepagepartialcfg().write(|w| w.0 = ERASE_PARTIAL_PAGE_DURATION_MS);
@@ -498,9 +514,6 @@ impl FlashOp {
                 if *address >= to {
                     return ControlFlow::Break(());
                 }
-            }
-            if get_time() + ERASE_PARTIAL_PAGE_DURATION_US >= slot_duration_us {
-                return ControlFlow::Continue(());
             }
         }
     }
